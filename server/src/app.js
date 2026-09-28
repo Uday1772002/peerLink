@@ -13,7 +13,7 @@ const paymentRouter = require("./routes/payments");
 const app = express(); //create server
 const initializeSocket = require("./utils/socket");
 const chatRouter = require("./routes/chat");
-const redisClient = require("./config/redis");
+const { initRedis } = require("./config/redis");
 
 const http = require("http");
 app.use(
@@ -41,9 +41,8 @@ const server = http.createServer(app);
 initializeSocket(server);
 connectDB()
   .then(async () => {
-    await redisClient.connect();
+    await initRedis();
     console.log("Database connected successfully");
-    console.log("Redis connected successfully");
     server.listen(3000, () => {
       console.log("Server is running on port 3000");
     });

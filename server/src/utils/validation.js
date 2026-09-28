@@ -1,5 +1,10 @@
 const validator = require("validator");
 
+const isValidPhotoUrl = (value) => {
+  if (!value || typeof value !== "string") return false;
+  return validator.isURL(value) || value.startsWith("data:image/");
+};
+
 const validateSignupData = (req) => {
   const { firstName, lastName, email, password } = req.body;
 
@@ -28,4 +33,8 @@ const validateEditProfileData = (req) => {
   return isEditAllowed;
 };
 
-module.exports = { validateSignupData, validateEditProfileData };
+module.exports = {
+  validateSignupData,
+  validateEditProfileData,
+  isValidPhotoUrl,
+};

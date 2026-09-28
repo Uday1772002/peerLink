@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { addUser } from "../utils/userSlice";
 import axios from "axios";
@@ -8,7 +8,11 @@ const EditProfileForm = ({ user }) => {
   const dispatch = useDispatch();
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
-  const [photoUrl, setPhotoUrl] = useState(user.photoUrl);
+  const [photoUrl, setPhotoUrl] = useState(user.photoUrl || "");
+  const [photoSource, setPhotoSource] = useState(
+    user.photoUrl ? "url" : "device",
+  );
+  const [selectedImageName, setSelectedImageName] = useState("");
   const [age, setAge] = useState(user.age);
   const [gender, setGender] = useState(user.gender || "");
   const [about, setAbout] = useState(user.about);
@@ -17,6 +21,29 @@ const EditProfileForm = ({ user }) => {
   );
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handlePhotoSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoSource("device");
+      setSelectedImageName(file.name);
+      setPhotoUrl(reader.result);
+      setError("");
+    };
+    reader.onerror = () => {
+      setError("Unable to read the selected photo. Please try again.");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = async () => {
     setError("");
@@ -97,16 +124,63 @@ const EditProfileForm = ({ user }) => {
             <div className="form-control">
               <label className="label pb-1">
                 <span className="label-text text-xs font-semibold uppercase tracking-wider text-base-content/60">
-                  Photo URL
+                  Photo
                 </span>
               </label>
-              <input
-                type="text"
-                className="input input-bordered input-sm h-10 w-full"
-                value={photoUrl}
-                placeholder="https://example.com/photo.jpg"
-                onChange={(e) => setPhotoUrl(e.target.value)}
-              />
+
+              <div className="flex gap-3 w-full mb-2">
+                <button
+                  type="button"
+                  className={`btn btn-sm flex-1 ${
+                    photoSource === "url" ? "btn-primary" : "btn-outline"
+                  }`}
+                  onClick={() => setPhotoSource("url")}
+                >
+                  Use URL
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm flex-1 ${
+                    photoSource === "device" ? "btn-primary" : "btn-outline"
+                  }`}
+                  onClick={() => setPhotoSource("device")}
+                >
+                  Add from device
+                </button>
+              </div>
+
+              {photoSource === "url" ? (
+                <input
+                  type="text"
+                  className="input input-bordered input-sm h-10 w-full"
+                  value={photoUrl}
+                  placeholder="https://example.com/photo.jpg"
+                  onChange={(e) => {
+                    setPhotoUrl(e.target.value);
+                    setSelectedImageName("");
+                  }}
+                />
+              ) : (
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm h-10"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Choose image
+                  </button>
+                  <span className="text-sm text-base-content/70 truncate">
+                    {selectedImageName || "No image selected"}
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

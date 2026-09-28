@@ -15,6 +15,7 @@ const Chat = () => {
   const socketRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [limitReached, setLimitReached] = useState(false);
 
   const fetchMessages = async () => {
     const chat = await axios.get(BASE_URL + "/chat/" + targetUserId, {
@@ -52,6 +53,10 @@ const Chat = () => {
         { firstName, text, senderId: senderId ? String(senderId) : "" },
       ]);
     });
+    socket.on("errorMessage", (message) => {
+      alert(message);
+      setLimitReached(true);
+    });
 
     //disconnect from the socket when the component unmounts
     return () => {
@@ -62,12 +67,9 @@ const Chat = () => {
 
   const sendMessage = () => {
     if (!newMessage.trim()) return;
-    const socket = socketRef.current || initializeSocket();
-    // optimistic UI: append message locally
-    setMessages((prev) => [
-      ...prev,
-      { firstName: user.firstName, text: newMessage, senderId: String(userId) },
-    ]);
+    const socket = socketRef.current;
+    if (!socket) return;
+
     //emit the message to the server
     socket.emit("sendMessage", {
       firstName: user.firstName,
@@ -101,11 +103,16 @@ const Chat = () => {
       </div>
       <div className="p-5 border-t border-gray-600 flex items-center gap-2">
         <input
+          disabled={limitReached}
           className="flex-1 border border-gray-500 text-white rounded p-2"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
         />
-        <button onClick={sendMessage} className="btn btn-secondary">
+        <button
+          disabled={limitReached}
+          onClick={sendMessage}
+          className="btn btn-secondary"
+        >
           Send
         </button>
       </div>

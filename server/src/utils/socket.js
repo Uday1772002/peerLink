@@ -2,7 +2,8 @@ const socket = require("socket.io");
 const crypto = require("crypto");
 const { Chat } = require("../models/chat");
 const connectionRequest = require("../models/connectionRequest");
-const redisClient = require("../config/redis");
+const redisConfig = require("../config/redis");
+const { redisClient } = redisConfig;
 const User = require("../models/user");
 const mongoose = require("mongoose");
 
@@ -37,22 +38,28 @@ const initializeSocket = (server) => {
       "sendMessage",
       async ({ firstName, text, userId, targetUserId }) => {
         try {
-          //redis check rate limit
-          const redisKey = `rate_limit:${userId}`;
-          const currentCount = await redisClient.incr(redisKey);
-          if (currentCount == 1) {
-            await redisClient.expire(redisKey, 86400); // set expiration to 24 hours
+          let currentCount = 0;
+          if (redisConfig.isRedisAvailable) {
+            const redisKey = `rate_limit:${userId}`;
+            currentCount = await redisClient.incr(redisKey);
+            if (currentCount === 1) {
+              await redisClient.expire(redisKey, 86400);
+            }
           }
 
           const user = await User.findById(userId);
           console.log("isPremium:", user?.isPremium, "count:", currentCount);
 
-          //limit to 100 messages per day
-          if (!user.isPremium && currentCount > 10) {
-            return socket.emit(
-              "errorMessage",
-              "You have reached your daily message limit. Upgrade to premium for unlimited messaging.",
-            );
+          if (!user || !user.isPremium) {
+            const dailyLimit = redisConfig.isRedisAvailable
+              ? 10
+              : Number.MAX_SAFE_INTEGER;
+            if (currentCount > dailyLimit) {
+              return socket.emit(
+                "errorMessage",
+                "You have reached your daily message limit. Upgrade to premium for unlimited messaging.",
+              );
+            }
           }
 
           const connection = await connectionRequest.findOne({
