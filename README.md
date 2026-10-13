@@ -88,3 +88,24 @@ Feel free to open issues or submit pull requests. For quick setup questions, sta
 
 ---
 Made with ❤️ — reach out to the repo owner for access details or questions.
+
+## Memberships
+
+Free users can send 10 messages total across their connections and swipe 10 profiles
+per day. Both interested and ignored swipes count. Limits reset at midnight UTC and
+are stored in MongoDB, so Redis availability does not affect them.
+
+All paid plans unlock unlimited messages, unlimited swipes, and a visible membership
+badge: Silver costs ₹499 for 1 month, Gold ₹999 for 3 months, and Platinum ₹1,999 for
+12 months. These are one-time payments with no automatic renewal. Expired memberships
+return to the free limits. Messaging still requires an accepted connection.
+
+After checkout, the server verifies the payment signature and captured payment with
+Razorpay before activating membership and redirecting to `/premium/success`. Configure
+Razorpay automatic capture and a `payment.captured` webhook at
+`/payment/webhook` with `RAZORPAY_WEBHOOK_SECRET`. This webhook also activates membership
+if the browser closes before verification. A processing payment can be checked again
+from the premium page. Duplicate callbacks do not extend membership.
+
+Run backend tests with `cd server && npm test`; build and lint the frontend with
+`cd client && npm run build && npm run lint`.

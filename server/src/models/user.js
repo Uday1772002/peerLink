@@ -50,13 +50,15 @@ const userSchema = new mongoose.Schema(
     },
     membershipType: {
       type: String,
-      // enum: {
-      //   values: ["silver", "gold", "premium"],
-      //   message: `{$VALUE} is not supported `,
-      // },
+      enum: ["silver", "gold", "platinum", "premium"],
     },
     membershipValidUntil: {
       type: Date,
+    },
+    dailyUsage: {
+      date: String,
+      messages: { type: Number, default: 0 },
+      swipes: { type: Number, default: 0 },
     },
     photoUrl: {
       type: String,
@@ -81,12 +83,17 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform(doc, user) {
+        delete user.password;
+        return user;
+      },
+    },
   },
 );
 
 userSchema.methods.getJWT = async function () {
   const user = this;
-  console.log("THE SECRET IS:", process.env.JWT_SECRET); // Or whatever your variable is named
   const token = await jwt.sign(
     { _id: user._id },
     String(process.env.JWT_SECRET).trim(),

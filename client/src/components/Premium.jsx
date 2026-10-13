@@ -1,187 +1,161 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { BASE_URL } from "../utils/constants";
+import { useDispatch } from "react-redux";
+import { addUser } from "../utils/userSlice";
+import { useNavigate } from "react-router-dom";
 
 const Premium = () => {
-  const [isUserPremium, setIsUserPremium] = useState(false);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [buying, setBuying] = useState("");
+  const [error, setError] = useState("");
+  const [pendingPayment, setPendingPayment] = useState(null);
+
   useEffect(() => {
-    verifyPremiumUser();
-  }, []);
-  const verifyPremiumUser = async () => {
-    try {
-      const res = await axios.get(BASE_URL + "/payment/verify", {
-        withCredentials: true,
-      });
-      if (res.data.isPremium) {
-        setIsUserPremium(true);
-        // alert("Payment successful! Your premium membership is now active.");
+    const verifyPremiumUser = async () => {
+      try {
+        const res = await axios.get(BASE_URL + "/payment/verify", { withCredentials: true });
+        dispatch(addUser(res.data.user));
+        if (res.data.isPremium) navigate("/premium/success", { replace: true });
+      } catch (err) {
+        setError(err.response?.data?.message || "Unable to check your membership. Please try again.");
+      } finally {
+        setLoading(false);
       }
+    };
+    verifyPremiumUser();
+  }, [dispatch, navigate]);
+
+  const verifyPayment = async (payment) => {
+    setBuying("verifying");
+    setPendingPayment(payment);
+    try {
+      const res = await axios.post(BASE_URL + "/payment/verify", payment, { withCredentials: true });
+      if (!res.data.isPremium) {
+        setError(res.data.message || "Your payment is processing. Check again shortly.");
+        return;
+      }
+      dispatch(addUser(res.data.user));
+      setPendingPayment(null);
+      navigate("/premium/success", { replace: true });
     } catch (err) {
-      alert("Payment verification failed: " + err.message);
+      setError(err.response?.data?.message || "Unable to verify your payment. Please check again.");
+    } finally {
+      setBuying("");
     }
   };
+
   const handleBuyClick = async (type) => {
-    const order = await axios.post(
-      BASE_URL + "/payment/create",
-      { membershipType: type },
-      { withCredentials: true },
-    );
-    const { amount, currency, keyId, notes, orderId } = order.data;
-    const options = {
-      key: keyId,
-      amount,
-      currency,
-      name: "devTinder",
-      description: "Premium Membership",
-      order_id: orderId,
-      prefill: {
-        name: notes.firstName + " " + notes.lastName,
-        email: notes.email,
-        contact: 9999999999,
-      },
-      theme: { color: "#F37254" },
-      handler: verifyPremiumUser,
-    };
-    const rzp = new window.Razorpay(options);
-    rzp.open();
+    if (buying || pendingPayment) return;
+    setBuying(type);
+    setError("");
+    try {
+      if (!window.Razorpay) throw new Error("Checkout could not load. Please refresh and try again.");
+      const order = await axios.post(BASE_URL + "/payment/create", { membershipType: type }, { withCredentials: true });
+      const { amount, currency, keyId, notes, orderId } = order.data;
+      const rzp = new window.Razorpay({
+        key: keyId,
+        amount,
+        currency,
+        name: "devTinder",
+        description: type + " Membership",
+        order_id: orderId,
+        prefill: { name: notes.firstName + " " + (notes.lastName || ""), email: notes.email },
+        theme: { color: "#F37254" },
+        handler: verifyPayment,
+        modal: { ondismiss: () => setBuying("") },
+      });
+      rzp.on("payment.failed", (response) => {
+        setError(response.error?.description || "Payment failed. Please try again.");
+        setBuying("");
+      });
+      rzp.open();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message);
+      setBuying("");
+    }
   };
 
-  return isUserPremium ? (
-    "You are already a premium member!"
-  ) : (
-    <div className="min-h-screen bg-base-200 flex flex-col items-center justify-center px-4 py-16">
-      <p className="text-xs font-medium tracking-widest uppercase text-base-content/40 mb-8">
+  const plans = [
+    { type: "silver", name: "Silver", icon: "🥈", price: "499", duration: "1 month" },
+    { type: "gold", name: "Gold", icon: "🥇", price: "999", duration: "3 months" },
+    { type: "platinum", name: "Platinum", icon: "💎", price: "1,999", duration: "12 months" },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-base-200 flex flex-col items-center justify-center px-4 py-16 pb-28">
+      <p className="text-xs font-medium tracking-widest uppercase text-base-content/40 mb-4">
         Choose your plan
       </p>
-
+      <p className="text-sm text-base-content/60 mb-8">
+        Free accounts get 10 messages and 10 swipes per day. Every paid plan
+        unlocks unlimited access.
+      </p>
+      {error && (
+        <div className="alert alert-error max-w-5xl mb-6" role="alert">
+          {error}
+        </div>
+      )}
+      {pendingPayment && (
+        <button
+          className="btn btn-primary mb-6"
+          disabled={Boolean(buying)}
+          onClick={() => verifyPayment(pendingPayment)}
+        >
+          Check payment status
+        </button>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-5xl">
-        {/* Silver */}
-        <div className="flex flex-col gap-5 rounded-2xl p-6 border border-base-content/10 bg-base-100">
-          <div>
-            <div className="text-2xl mb-2">🥈</div>
-            <h3 className="text-lg font-semibold text-base-content">Silver</h3>
-            <p className="text-sm text-base-content/50 mt-1 leading-relaxed">
-              A solid start for individuals exploring the basics.
-            </p>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-semibold text-base-content">
-              ₹499
-            </span>
-            <span className="text-sm text-base-content/40">/ month</span>
-          </div>
-          <hr className="border-base-content/10" />
-          <ul className="flex flex-col gap-2.5 flex-1 text-sm text-base-content/60">
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> 5 projects
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> 10 GB storage
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Email support
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Basic analytics
-            </li>
-          </ul>
-          <button
-            onClick={() => handleBuyClick("silver")}
-            className="mt-auto w-full py-3 rounded-xl text-sm font-medium border border-base-content/20 text-base-content hover:bg-base-content/5 transition-all"
+        {plans.map((plan) => (
+          <div
+            key={plan.type}
+            className={
+              "flex flex-col gap-5 rounded-2xl p-6 bg-base-100 relative " +
+              (plan.type === "gold" ? "border-2 border-info" : "border border-base-content/10")
+            }
           >
-            Select Silver
-          </button>
-        </div>
-
-        {/* Gold — featured */}
-        <div className="flex flex-col gap-5 rounded-2xl p-6 border-2 border-info bg-base-100 relative">
-          <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold px-4 py-1 rounded-full bg-info text-info-content whitespace-nowrap">
-            ⚡ Most popular
-          </span>
-          <div className="mt-3">
-            <div className="text-2xl mb-2">🥇</div>
-            <h3 className="text-lg font-semibold text-base-content">Gold</h3>
-            <p className="text-sm text-base-content/50 mt-1 leading-relaxed">
-              For professionals who need more power and support.
+            {plan.type === "gold" && (
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold px-4 py-1 rounded-full bg-info text-info-content whitespace-nowrap">
+                ⚡ Most popular
+              </span>
+            )}
+            <div className="mt-3">
+              <div className="text-2xl mb-2">{plan.icon}</div>
+              <h3 className="text-lg font-semibold">{plan.name}</h3>
+            </div>
+            <div>
+              <span className="text-4xl font-semibold">₹{plan.price}</span>
+              <span className="text-sm text-base-content/40"> / {plan.duration}</span>
+            </div>
+            <p className="text-xs text-base-content/50">
+              One-time payment. No automatic renewal.
             </p>
+            <hr className="border-base-content/10" />
+            <ul className="flex flex-col gap-2.5 flex-1 text-sm text-base-content/60">
+              <li>✓ Unlimited messages with your connections</li>
+              <li>✓ Unlimited swipes</li>
+              <li>✓ {plan.name} membership badge</li>
+              <li>✓ Access for {plan.duration}</li>
+            </ul>
+            <button
+              onClick={() => handleBuyClick(plan.type)}
+              disabled={Boolean(buying) || Boolean(pendingPayment)}
+              className={"btn w-full " + (plan.type === "gold" ? "btn-info" : "btn-outline")}
+            >
+              {buying === plan.type || buying === "verifying" ? "Processing..." : "Select " + plan.name}
+            </button>
           </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-semibold text-base-content">
-              ₹999
-            </span>
-            <span className="text-sm text-base-content/40">/ month</span>
-          </div>
-          <hr className="border-base-content/10" />
-          <ul className="flex flex-col gap-2.5 flex-1 text-sm text-base-content/60">
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> 25 projects
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> 50 GB storage
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Priority email & chat
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Advanced analytics
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Custom integrations
-            </li>
-          </ul>
-          <button
-            onClick={() => handleBuyClick("gold")}
-            className="mt-auto w-full py-3 rounded-xl text-sm font-medium bg-base-content text-base-100 hover:opacity-85 transition-all"
-          >
-            Select Gold
-          </button>
-        </div>
-
-        {/* Platinum */}
-        <div className="flex flex-col gap-5 rounded-2xl p-6 border border-base-content/10 bg-base-100">
-          <div>
-            <div className="text-2xl mb-2">💎</div>
-            <h3 className="text-lg font-semibold text-base-content">
-              Platinum
-            </h3>
-            <p className="text-sm text-base-content/50 mt-1 leading-relaxed">
-              Full access for teams that demand the very best.
-            </p>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-semibold text-base-content">
-              ₹1,999
-            </span>
-            <span className="text-sm text-base-content/40">/ month</span>
-          </div>
-          <hr className="border-base-content/10" />
-          <ul className="flex flex-col gap-2.5 flex-1 text-sm text-base-content/60">
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Unlimited projects
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> 500 GB storage
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> 24/7 dedicated support
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Full analytics suite
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> Custom integrations
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-success">✓</span> SLA guarantee
-            </li>
-          </ul>
-          <button
-            onClick={() => handleBuyClick("platinum")}
-            className="mt-auto w-full py-3 rounded-xl text-sm font-medium border border-base-content/20 text-base-content hover:bg-base-content/5 transition-all"
-          >
-            Select Platinum
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );

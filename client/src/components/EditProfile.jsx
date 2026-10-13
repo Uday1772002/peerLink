@@ -1,3 +1,4 @@
+import MembershipBadge from "./MembershipBadge";
 import React, { useState, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { addUser } from "../utils/userSlice";
@@ -89,7 +90,7 @@ const EditProfileForm = ({ user }) => {
         <div className="card bg-base-300 shadow-2xl flex-1">
           <div className="card-body gap-3">
             <h2 className="text-xl font-bold tracking-wide border-b border-base-content/10 pb-3 mb-1">
-              Edit Profile
+              Edit Profile <MembershipBadge user={user} />
             </h2>
 
             <div className="grid grid-cols-2 gap-3">

@@ -3,6 +3,8 @@ const userAuth = require("../middlewares/auth");
 const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
 const sendEmail = require("../utils/sendEmail");
+const mongoose = require("mongoose");
+const { reserveDailyUsage, releaseDailyUsage } = require("../utils/membership");
 
 const requestRouter = express.Router();
 
@@ -10,6 +12,8 @@ requestRouter.post(
   "/request/send/:status/:toUserId",
   userAuth,
   async (req, res) => {
+    let usageDate;
+    let requestSaved = false;
     try {
       const fromUserId = req.user._id;
       const toUserId = req.params.toUserId;
@@ -22,9 +26,9 @@ requestRouter.post(
           .json({ message: "invalid Status Type: " + status });
       }
 
-      // if (fromUserId.toString() === toUserId) {
-      //   return res.status(400).send("invalid");
-      // }
+      if (!mongoose.isValidObjectId(toUserId) || fromUserId.toString() === toUserId) {
+        return res.status(400).json({ message: "Invalid target user" });
+      }
 
       //finding if we already sent request or not to prevent duplicate entries
       const existingConnectionRequest = await ConnectionRequest.findOne({
@@ -44,6 +48,7 @@ requestRouter.post(
         return res.status(400).json({ message: "User doesn't Exits" });
       }
 
+      usageDate = await reserveDailyUsage(req.user, "swipes");
       const connectionRequest = new ConnectionRequest({
         fromUserId,
         toUserId,
@@ -51,13 +56,17 @@ requestRouter.post(
       });
 
       const data = await connectionRequest.save();
+      requestSaved = true;
 
       if (status === "interested") {
-        const emailResponse = await sendEmail.run(
-          req.user.firstName + " is " + status + " in " + toUser.firstName,
-          "Connection Request Status",
-        );
-        console.log("Email Response: ", emailResponse);
+        try {
+          await sendEmail.run(
+            req.user.firstName + " is interested in connecting with " + toUser.firstName + ".",
+            "Connection Request Status",
+          );
+        } catch (err) {
+          console.error("Email failed:", err.message);
+        }
       }
 
       res.json({
@@ -66,7 +75,8 @@ requestRouter.post(
         data,
       });
     } catch (err) {
-      res.status(400).send("Error: " + err.message);
+      if (!requestSaved) await releaseDailyUsage(req.user._id, "swipes", usageDate);
+      res.status(err.code === "DAILY_LIMIT" ? 429 : 400).json({ message: err.message, code: err.code });
     }
   },
 );

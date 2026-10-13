@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import { BASE_URL } from "../utils/constants";
 import { useDispatch } from "react-redux";
@@ -10,51 +11,54 @@ import UserCard from "./userCard";
 const Feed = () => {
   const feed = useSelector((store) => store.feed);
   const dispatch = useDispatch();
+  const [error, setError] = useState("");
+  const [swiping, setSwiping] = useState(false);
+  const swipeInProgress = useRef(false);
 
-  const getFeed = async () => {
+  const getFeed = useCallback(async (refresh = false) => {
     try {
-      if (feed) return;
+      if (feed && !refresh) return;
       const res = await axios.get(BASE_URL + "/user/feed", {
         withCredentials: true,
       });
       dispatch(addFeed(res.data.data));
     } catch (err) {
-      console.error("Failed to fetch feed", err);
+      setError(err.response?.data?.message || "Unable to load profiles. Please try again.");
     }
-  };
+  }, [feed, dispatch]);
 
   useEffect(() => {
     getFeed();
-  }, []);
+  }, [getFeed]);
 
-  const sendRequest = async (status, userId) => {
+  const sendRequest = async (status) => {
+    if (!feed?.length || swipeInProgress.current) return;
+    swipeInProgress.current = true;
+    setSwiping(true);
+    setError("");
     try {
       await axios.post(
-        `${BASE_URL}/request/send/${status}/${userId}`,
+        `${BASE_URL}/request/send/${status}/${feed[0]._id}`,
         {},
         { withCredentials: true },
       );
+      const remainingFeed = feed.slice(1);
+      dispatch(addFeed(remainingFeed));
+      if (remainingFeed.length === 0) await getFeed(true);
     } catch (err) {
-      console.error("Failed to send request", err);
+      setError(err.response?.data?.message || "Failed to send request. Please try again.");
+    } finally {
+      swipeInProgress.current = false;
+      setSwiping(false);
     }
   };
 
-  const handleSwipeLeft = () => {
-    if (!feed || feed.length === 0) return;
-    const topUser = feed[0];
-    sendRequest("ignored", topUser._id);
-    dispatch(addFeed(feed.slice(1)));
-  };
-
-  const handleSwipeRight = () => {
-    if (!feed || feed.length === 0) return;
-    const topUser = feed[0];
-    sendRequest("interested", topUser._id);
-    dispatch(addFeed(feed.slice(1)));
-  };
+  const handleSwipeLeft = () => sendRequest("ignored");
+  const handleSwipeRight = () => sendRequest("interested");
 
   return feed && feed.length > 0 ? (
-    <div className="flex justify-center mt-10">
+    <div className="flex flex-col items-center mt-10 pb-28 gap-4">
+      {error && <div className="alert alert-error max-w-lg" role="alert"><span>{error}</span><Link to="/premium" className="link">View premium</Link></div>}
       <div className="relative" style={{ width: "380px", height: "580px" }}>
         {feed
           .slice(0, 3)
@@ -79,6 +83,7 @@ const Feed = () => {
               >
                 <UserCard
                   user={user}
+                  disabled={swiping}
                   onSwipeLeft={isTop ? handleSwipeLeft : undefined}
                   onSwipeRight={isTop ? handleSwipeRight : undefined}
                 />
@@ -86,9 +91,14 @@ const Feed = () => {
             );
           })}
       </div>
+      <div className="flex gap-6">
+        <button disabled={swiping} onClick={handleSwipeLeft} className="btn btn-circle btn-lg btn-outline btn-error" aria-label="Pass">✕</button>
+        <button disabled={swiping} onClick={handleSwipeRight} className="btn btn-circle btn-lg btn-outline btn-success" aria-label="Interested">♥</button>
+      </div>
     </div>
   ) : (
-    <div className="flex justify-center mt-20">
+    <div className="flex flex-col items-center mt-20 gap-4">
+      {error && <p className="text-error" role="alert">{error}</p>}
       <p className="text-xl text-gray-500">No more profiles!</p>
     </div>
   );

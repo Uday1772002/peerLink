@@ -26,10 +26,12 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    membershipValidUntil: Date,
     receipt: {
       type: String,
     },
     notes: {
+      email: String,
       firstName: {
         type: String,
       },

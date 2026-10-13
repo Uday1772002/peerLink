@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const { isPremiumUser } = require("../utils/membership");
 
 const userAuth = async (req, res, next) => {
   //Read the token from req cookies
@@ -15,6 +16,9 @@ const userAuth = async (req, res, next) => {
     const user = await User.findById({ _id });
     if (!user) {
       return res.status(401).send("Unauthorized: User not found");
+    }
+    if (user.isPremium && !isPremiumUser(user)) {
+      user.isPremium = false;
     }
     req.user = user;
     next();

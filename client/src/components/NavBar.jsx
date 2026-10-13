@@ -1,3 +1,4 @@
+import MembershipBadge from "./MembershipBadge";
 import React from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
@@ -5,6 +6,7 @@ import { BASE_URL } from "../utils/constants";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
+import { addFeed } from "../utils/feedSlice";
 import { removeUser } from "../utils/userSlice";
 
 const Navbar = () => {
@@ -16,6 +18,7 @@ const Navbar = () => {
     try {
       await axios.post(BASE_URL + "/logout", {}, { withCredentials: true });
       dispatch(removeUser());
+      dispatch(addFeed(null));
       return navigate("/login");
     } catch (err) {
       console.error("Logout failed", err);
@@ -31,8 +34,9 @@ const Navbar = () => {
       </div>
       {user && (
         <div className="flex gap-2">
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
             <p> Welcome, {user.firstName}</p>
+            <MembershipBadge user={user} />
           </div>
           <div className="dropdown dropdown-end mx-4 flex">
             <div

@@ -1,3 +1,4 @@
+import MembershipBadge from "./MembershipBadge";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { BASE_URL } from "../utils/constants";
@@ -89,6 +90,7 @@ const SentRequests = () => {
                         </span>
                       )}
                     </h2>
+                    <MembershipBadge user={user} />
                     {user.gender && (
                       <p className="text-xs text-base-content/50 capitalize">
                         {user.gender}

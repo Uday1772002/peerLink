@@ -27,7 +27,11 @@ app.use(
   }),
 );
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buffer) => {
+    req.rawBody = buffer;
+  },
+}));
 app.use(cookieParser());
 
 app.use("/", authRouter);

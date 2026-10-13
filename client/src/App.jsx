@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Navbar from "./components/NavBar";
 import Body from "./components/Body";
 import Login from "./components/Login";
 import Profile from "./components/Profile";
@@ -14,6 +13,7 @@ import Requests from "./components/Requests";
 import SentRequests from "./components/SentRequests";
 import Premium from "./components/Premium";
 import Chat from "./components/Chat";
+import PremiumSuccess from "./components/PremiumSuccess";
 
 function App() {
   return (
@@ -30,6 +30,7 @@ function App() {
               <Route path="connections" element={<Connections />} />
               <Route path="requests" element={<Requests />} />
               <Route path="premium" element={<Premium />} />
+              <Route path="premium/success" element={<PremiumSuccess />} />
               <Route path="/chat/:targetUserId" element={<Chat />} />
               <Route path="requests/sent" element={<SentRequests />} />
               <Route path="/footer" element={<Footer />} />

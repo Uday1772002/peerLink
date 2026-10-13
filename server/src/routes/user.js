@@ -4,7 +4,7 @@ const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
 
 const userRouter = express.Router();
-const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills";
+const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills isPremium membershipType membershipValidUntil";
 userRouter.get("/user/requests/received", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
@@ -13,7 +13,7 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
       status: "interested",
     }).populate(
       "fromUserId",
-      "firstName lastName photoUrl age gender about skills",
+      "firstName lastName photoUrl age gender about skills isPremium membershipType membershipValidUntil",
     );
     res.json({
       message: "Data Fetched Successfully",

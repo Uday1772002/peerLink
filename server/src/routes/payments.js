@@ -5,26 +5,53 @@ const RazorpayInstance = require("../utils/razorpay");
 const paymentModel = require("../models/payments");
 const User = require("../models/user");
 const { membershipAmount } = require("../utils/constants");
-const {
-  validateWebhookSignature,
-} = require("razorpay/dist/utils/razorpay-utils");
+const { isPremiumUser, getMembershipExpiry, getDailyUsage } = require("../utils/membership");
+const { validateWebhookSignature, validatePaymentVerification } = require("razorpay/dist/utils/razorpay-utils");
+
+const activateMembership = async (payment, paymentDetails) => {
+  if (
+    paymentDetails.status !== "captured" ||
+    paymentDetails.order_id !== payment.orderId ||
+    paymentDetails.amount !== payment.amount ||
+    paymentDetails.currency !== payment.currency
+  ) {
+    throw new Error("Payment has not been captured or does not match the order");
+  }
+  // A fixed expiry makes checkout and repeated webhooks safe to process again.
+  const validUntil = getMembershipExpiry(payment.notes.membershipType, payment.createdAt);
+  await paymentModel.updateOne(
+    { _id: payment._id },
+    { $set: { status: "captured", paymentId: paymentDetails.id, membershipValidUntil: validUntil } },
+  );
+  await User.updateOne(
+    {
+      _id: payment.userId,
+      $or: [
+        { membershipValidUntil: { $exists: false } },
+        { membershipValidUntil: null },
+        { membershipValidUntil: { $lt: validUntil } },
+      ],
+    },
+    { $set: { isPremium: true, membershipType: payment.notes.membershipType, membershipValidUntil: validUntil } },
+  );
+};
 
 paymentRouter.post("/payment/create", userAuth, async (req, res) => {
   try {
     const { membershipType } = req.body;
+    if (!Object.hasOwn(membershipAmount, membershipType)) {
+      return res.status(400).json({ message: "Invalid membership type" });
+    }
+    if (isPremiumUser(req.user)) {
+      return res.status(400).json({ message: "You already have an active membership" });
+    }
     const { firstName, lastName, email } = req.user;
     const order = await RazorpayInstance.orders.create({
-      amount: membershipAmount[membershipType].price * 100, // amount in paise
+      amount: membershipAmount[membershipType].price * 100,
       currency: "INR",
-      receipt: "receipt#1",
-      notes: {
-        firstName: firstName,
-        lastName: lastName,
-        email: email,
-        membershipType: membershipType,
-      },
+      receipt: "receipt_" + Date.now(),
+      notes: { firstName, lastName, email, membershipType },
     });
-    //save the order details
     const paymentDetails = new paymentModel({
       userId: req.user._id,
       orderId: order.id,
@@ -37,92 +64,67 @@ paymentRouter.post("/payment/create", userAuth, async (req, res) => {
     const savedPayment = await paymentDetails.save();
     res.json({ ...savedPayment.toJSON(), keyId: process.env.RAZORPAY_KEY_ID });
   } catch (err) {
-    res.status(500).send("Error creating payment:" + err.message);
-    console.log(err);
+    res.status(500).json({ message: "Error creating payment: " + err.message });
+  }
+});
+
+paymentRouter.post("/payment/verify", userAuth, async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    if (![razorpay_order_id, razorpay_payment_id, razorpay_signature].every((value) => typeof value === "string" && value)) {
+      return res.status(400).json({ message: "Payment details are missing" });
+    }
+    const payment = await paymentModel.findOne({ orderId: razorpay_order_id, userId: req.user._id });
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+    const isValid = validatePaymentVerification(
+      { order_id: payment.orderId, payment_id: razorpay_payment_id },
+      razorpay_signature,
+      process.env.RAZORPAY_KEY_SECRET,
+    );
+    if (!isValid) return res.status(400).json({ message: "Invalid payment signature" });
+    const paymentDetails = await RazorpayInstance.payments.fetch(razorpay_payment_id);
+    if (paymentDetails.status === "authorized") {
+      return res.status(202).json({ isPremium: false, message: "Payment is processing. Please check your membership again shortly." });
+    }
+    await activateMembership(payment, paymentDetails);
+    const user = await User.findById(req.user._id);
+    res.json({ isPremium: isPremiumUser(user), user });
+  } catch (err) {
+    res.status(400).json({ message: "Payment verification failed: " + err.message });
   }
 });
 
 paymentRouter.post("/payment/webhook", async (req, res) => {
   try {
-    const webhookValid = validateWebhookSignature(
-      JSON.stringify(req.body),
-      req.headers["x-razorpay-signature"],
-      process.env.RAZORPAY_WEBHOOK_SECRET,
-    );
-    console.log("Webhook valid:", webhookValid);
-    if (!webhookValid) {
+    const signature = req.headers["x-razorpay-signature"];
+    if (!signature || !req.rawBody || !validateWebhookSignature(
+      req.rawBody.toString(), signature, process.env.RAZORPAY_WEBHOOK_SECRET,
+    )) {
       return res.status(400).send("Invalid webhook signature");
     }
-    //update payment status based on the event if the webhook is valid and update the user's membership status accordingly and return response as success to razorpay
-    const paymentDetails = req.body.payload.payment.entity;
-    const payment = await paymentModel.findOne({
-      orderId: paymentDetails.order_id,
-    });
-    if (!payment) {
-      return res.status(404).send("Payment not found");
+    if (req.body.event !== "payment.captured") {
+      return res.status(200).send("Event received");
     }
-    // Update payment status based on the event type received from Razorpay
-    payment.status = paymentDetails.status;
-    await payment.save();
-
-    // Update user's membership status based on the payment status
-    const user = await User.findById({ _id: payment.userId });
-    user.isPremium = true;
-    user.membershipType = payment.notes.membershipType;
-    const currentDate = new Date();
-    if (payment.notes.membershipType === "silver") {
-      user.membershipValidUntil = new Date(
-        currentDate.setMonth(currentDate.getMonth() + 1),
-      );
-    } else if (payment.notes.membershipType === "gold") {
-      user.membershipValidUntil = new Date(
-        currentDate.setMonth(currentDate.getMonth() + 3),
-      );
-    } else if (payment.notes.membershipType === "premium") {
-      user.membershipValidUntil = new Date(
-        currentDate.setFullYear(currentDate.getFullYear() + 1),
-      );
-    }
-    await user.save();
-
-    console.log("Payment and user membership status updated successfully");
-    return res.status(200).send("Webhook received successfully");
+    const paymentDetails = req.body.payload?.payment?.entity;
+    if (!paymentDetails) return res.status(400).send("Payment details are missing");
+    const payment = await paymentModel.findOne({ orderId: paymentDetails.order_id });
+    if (!payment) return res.status(404).send("Payment not found");
+    await activateMembership(payment, paymentDetails);
+    res.status(200).send("Webhook received successfully");
   } catch (err) {
-    res.status(500).send("Error in webhook:" + err.message);
-    console.log(err);
+    res.status(500).send("Error in webhook: " + err.message);
   }
 });
+
 paymentRouter.get("/payment/verify", userAuth, async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user.isPremium) {
-      return res.json({ isPremium: false });
-    } else {
-      return res.json({
-        isPremium: true,
-        membershipType: user.membershipType,
-        validUntil: user.membershipValidUntil,
-      });
-    }
-    // Check if the membership is still valid
-    const currentDate = new Date();
-    if (user.membershipValidUntil < currentDate) {
-      // Membership has expired, update user status
-      user.isPremium = false;
-      user.membershipType = undefined;
-      user.membershipValidUntil = undefined;
-      await user.save();
-      return res.json({ isPremium: false });
-    }
-    res.json({
-      isPremium: true,
-      membershipType: user.membershipType,
-      validUntil: user.membershipValidUntil,
-    });
-  } catch (err) {
-    res.status(500).send("Error fetching payment status:" + err.message);
-    console.log(err);
-  }
+  const user = req.user;
+  res.json({
+    isPremium: isPremiumUser(user),
+    membershipType: isPremiumUser(user) ? user.membershipType : null,
+    validUntil: isPremiumUser(user) ? user.membershipValidUntil : null,
+    usage: getDailyUsage(user),
+    user,
+  });
 });
 
 module.exports = paymentRouter;

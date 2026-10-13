@@ -1,14 +1,16 @@
+import MembershipBadge from "./MembershipBadge";
 import React, { useState, useRef } from "react";
 
-const UserCard = ({ user, onSwipeLeft, onSwipeRight }) => {
-  if (!user) return null;
-  const { firstName, lastName, photoUrl, age, gender, about } = user;
+const UserCard = ({ user, onSwipeLeft, onSwipeRight, disabled }) => {
 
   const [dragging, setDragging] = useState(false);
   const [offset, setOffset] = useState(0);
   const startX = useRef(0);
+  if (!user) return null;
+  const { firstName, lastName, photoUrl, age, gender, about } = user;
 
   const handlePointerDown = (e) => {
+    if (disabled || (!onSwipeLeft && !onSwipeRight)) return;
     setDragging(true);
     startX.current = e.clientX;
   };
@@ -46,9 +48,10 @@ const UserCard = ({ user, onSwipeLeft, onSwipeRight }) => {
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
+      <div className="absolute top-4 right-4 z-10"><MembershipBadge user={user} /></div>
       {/* Photo fills entire card */}
       <img
-        src={photoUrl}
+        src={photoUrl || "https://api.dicebear.com/9.x/thumbs/svg?seed=" + user._id}
         alt={firstName}
         className="w-full h-full object-cover pointer-events-none"
       />
