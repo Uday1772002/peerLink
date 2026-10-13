@@ -1,3 +1,4 @@
+import DeveloperDetails from "./DeveloperDetails";
 import MembershipBadge from "./MembershipBadge";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -109,6 +110,7 @@ const Requests = () => {
                       )}
                     </h2>
                     <MembershipBadge user={user} />
+                    <DeveloperDetails user={user} />
                     {user.gender && (
                       <p className="text-xs text-base-content/50 capitalize">
                         {user.gender}

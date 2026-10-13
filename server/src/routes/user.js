@@ -2,9 +2,10 @@ const express = require("express");
 const userAuth = require("../middlewares/auth");
 const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
+const { getFeedFilters } = require("../utils/developerProfile");
 
 const userRouter = express.Router();
-const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills isPremium membershipType membershipValidUntil";
+const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills location experienceLevel interests githubUrl projects isPremium membershipType membershipValidUntil";
 userRouter.get("/user/requests/received", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
@@ -13,7 +14,7 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
       status: "interested",
     }).populate(
       "fromUserId",
-      "firstName lastName photoUrl age gender about skills isPremium membershipType membershipValidUntil",
+      "firstName lastName photoUrl age gender about skills location experienceLevel interests githubUrl projects isPremium membershipType membershipValidUntil",
     );
     res.json({
       message: "Data Fetched Successfully",
@@ -52,9 +53,9 @@ userRouter.get("/user/feed", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
 
-    const page = parseInt(req.query.page) || 1;
-    let limit = parseInt(req.query.limit) || 10;
-    limit = limit > 100 ? 100 : limit;
+    const filters = getFeedFilters(req.query);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const skip = (page - 1) * limit;
 
     const connectionRequests = await ConnectionRequest.find({
@@ -66,12 +67,12 @@ userRouter.get("/user/feed", userAuth, async (req, res) => {
       hideUsersFromFeed.add(req.fromUserId.toString());
       hideUsersFromFeed.add(req.toUserId.toString());
     });
-    console.log(hideUsersFromFeed);
 
     const user = await User.find({
       $and: [
         { _id: { $nin: Array.from(hideUsersFromFeed) } },
         { _id: { $ne: loggedInUser._id } },
+        ...filters,
       ],
     })
       .select(USER_SAFE_DATA)
@@ -79,7 +80,7 @@ userRouter.get("/user/feed", userAuth, async (req, res) => {
       .limit(limit);
     res.json({ data: user });
   } catch (err) {
-    res.status(404).json({ message: err.message });
+    res.status(400).json({ message: err.message });
   }
 });
 

@@ -1,3 +1,4 @@
+import Notifications from "./Notifications";
 import MembershipBadge from "./MembershipBadge";
 import React from "react";
 import { useSelector } from "react-redux";
@@ -33,7 +34,8 @@ const Navbar = () => {
         </Link>
       </div>
       {user && (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Notifications key={user._id} userId={user._id} />
           <div className="flex items-center gap-2">
             <p> Welcome, {user.firstName}</p>
             <MembershipBadge user={user} />

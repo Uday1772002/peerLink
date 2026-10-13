@@ -2,6 +2,21 @@ const mongoose = require("mongoose");
 const validator = require("validator");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const { experienceLevels, developerInterests, isValidGithubUrl, isValidProjectUrl } = require("../utils/developerProfile");
+
+const projectSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true, maxlength: 80 },
+  description: { type: String, trim: true, maxlength: 300 },
+  url: {
+    type: String,
+    required: true,
+    trim: true,
+    validate: {
+      validator: isValidProjectUrl,
+      message: "Use a valid HTTPS project link",
+    },
+  },
+});
 
 const userSchema = new mongoose.Schema(
   {
@@ -77,6 +92,21 @@ const userSchema = new mongoose.Schema(
     },
 
     skills: { type: [String] },
+    location: { type: String, trim: true, maxlength: 100 },
+    experienceLevel: { type: String, enum: [...experienceLevels, ""] },
+    interests: { type: [String], enum: developerInterests },
+    githubUrl: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: isValidGithubUrl,
+        message: "Use a GitHub profile URL such as https://github.com/username",
+      },
+    },
+    projects: {
+      type: [projectSchema],
+      validate: { validator: (projects) => projects.length <= 3, message: "Showcase up to 3 projects" },
+    },
 
     // createdAt: { type: Date, default: Date.now() },
     // updatedAt: { type: Date, default: Date.now() },

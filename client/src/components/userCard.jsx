@@ -1,3 +1,4 @@
+import DeveloperDetails from "./DeveloperDetails";
 import MembershipBadge from "./MembershipBadge";
 import React, { useState, useRef } from "react";
 
@@ -10,6 +11,7 @@ const UserCard = ({ user, onSwipeLeft, onSwipeRight, disabled }) => {
   const { firstName, lastName, photoUrl, age, gender, about } = user;
 
   const handlePointerDown = (e) => {
+    if (e.target.closest("a, button, input, textarea, select")) return;
     if (disabled || (!onSwipeLeft && !onSwipeRight)) return;
     setDragging(true);
     startX.current = e.clientX;
@@ -69,10 +71,16 @@ const UserCard = ({ user, onSwipeLeft, onSwipeRight, disabled }) => {
       )}
 
       {/* Info overlay at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent px-6 py-6 text-white">
+      <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent px-6 py-6 text-white max-h-[80%] overflow-y-auto">
         <h2 className="text-2xl font-bold">
           {firstName} {lastName}{age && <span className="font-light">, {age}</span>}
         </h2>
+        <DeveloperDetails user={user} />
+        {user.skills?.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {user.skills.slice(0, 5).map((skill, index) => <span key={index} className="badge badge-sm badge-outline">{skill}</span>)}
+          </div>
+        )}
         {gender && <p className="text-sm text-gray-300 mt-1">{gender}</p>}
         {about && <p className="text-sm mt-2 text-gray-200 line-clamp-2">{about}</p>}
       </div>

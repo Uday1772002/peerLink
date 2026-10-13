@@ -7,6 +7,7 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    readAt: { type: Date, default: null },
     text: {
       type: String,
       required: true,

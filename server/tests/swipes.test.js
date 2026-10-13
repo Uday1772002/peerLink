@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const jwt = require("jsonwebtoken");
 const User = require("../src/models/user");
+const Notification = require("../src/models/notification");
 const ConnectionRequest = require("../src/models/connectionRequest");
 const sendEmail = require("../src/utils/sendEmail");
 const router = require("../src/routes/request");
@@ -9,13 +10,14 @@ process.env.JWT_SECRET = "swipe_test_secret";
 const userId = "507f1f77bcf86cd799439011";
 const targetUserId = "507f1f77bcf86cd799439012";
 
-const request = (status, target = targetUserId) => new Promise((resolve, reject) => {
-  const req = { method: "POST", url: "/request/send/" + status + "/" + target, cookies: { token: jwt.sign({ _id: userId }, process.env.JWT_SECRET) } };
+const request = (status, target = targetUserId, url) => new Promise((resolve, reject) => {
+  const req = { method: "POST", url: url || "/request/send/" + status + "/" + target, cookies: { token: jwt.sign({ _id: userId }, process.env.JWT_SECRET) } };
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(data) { resolve({ status: this.statusCode, data }); }, send(data) { resolve({ status: this.statusCode, data }); } };
   router.handle(req, res, (err) => reject(err || new Error("Route not found")));
 });
 
 const setup = (t) => {
+  t.mock.method(Notification, "create", async (details) => details);
   const user = { _id: userId, firstName: "Test", isPremium: false };
   let count = 0;
   t.mock.method(User, "findById", async (id) => typeof id === "object" ? user : { _id: targetUserId, firstName: "Target" });
@@ -67,4 +69,32 @@ test("failed saves release reserved swipe quota", async (t) => {
   assert.equal((await request("ignored")).status, 400);
   const release = User.updateOne.mock.calls.at(-1).arguments[1];
   assert.equal(release.$inc["dailyUsage.swipes"], -1);
+});
+
+
+test("interested swipes notify the recipient, ignored swipes do not", async (t) => {
+  setup(t);
+  await request("ignored");
+  assert.equal(Notification.create.mock.calls.length, 0);
+  await request("interested");
+  const details = Notification.create.mock.calls[0].arguments[0];
+  assert.equal(details.type, "request");
+  assert.equal(details.userId, targetUserId);
+  assert.equal(String(details.fromUserId), userId);
+});
+
+test("accepting a request notifies the original sender", async (t) => {
+  setup(t);
+  const connection = new ConnectionRequest({ fromUserId: targetUserId, toUserId: userId, status: "interested" });
+  ConnectionRequest.findOne.mock.mockImplementation(async (filter) => {
+    assert.equal(String(filter.toUserId), userId);
+    assert.equal(filter.status, "interested");
+    return connection;
+  });
+  const result = await request("accepted", targetUserId, "/request/review/accepted/507f1f77bcf86cd799439013");
+  assert.equal(result.status, 200);
+  const details = Notification.create.mock.calls[0].arguments[0];
+  assert.equal(details.type, "connection");
+  assert.equal(String(details.userId), targetUserId);
+  assert.equal(String(details.fromUserId), userId);
 });

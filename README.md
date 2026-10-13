@@ -109,3 +109,40 @@ from the premium page. Duplicate callbacks do not extend membership.
 
 Run backend tests with `cd server && npm test`; build and lint the frontend with
 `cd client && npm run build && npm run lint`.
+
+## Chat and notifications
+
+The navigation bar shows unread message and notification counts. Each connection
+shows its own unread message count. The bell lists up to 30 notifications, showing
+unread items first, for new requests, accepted connections, and incoming messages.
+Notifications persist in MongoDB and can be marked as read individually or for the
+items currently shown. Opening a notification does not clear the conversation's
+unread messages.
+
+Incoming messages become read only when their chat is visible and focused. Read
+updates specify the displayed message IDs so new arrivals are not cleared by an
+older read request. Existing messages without a read timestamp count as unread
+until their recipient opens the conversation.
+
+Typing indicators use authenticated Socket.IO rooms, require an accepted connection,
+and do not consume the message quota. They clear after a pause, when sending or
+leaving chat, or after a three-second timeout on the recipient's screen. Notifications
+and unread counts refresh live and every 30 seconds; chat history also refreshes
+on reconnect. See [Socket.IO rooms](https://socket.io/docs/v4/rooms/) for the room
+routing used by the server. No new environment variables are required.
+
+## Developer matching and showcases
+
+Edit your profile to add a city/region, experience level (beginner, intermediate,
+experienced), and goals (project partner, mentor others, find a mentor, cofounder).
+Add a GitHub profile URL and up to three projects, each with a title, optional
+summary, and HTTPS repository or live demo link. These appear in the live preview,
+feed, connections, and request cards. Links are entered manually; no GitHub token
+or OAuth setup is required, and account ownership is not verified.
+
+Use the feed's filters to find developers by any selected skill, location text,
+experience, and their goal. Skills match whole names without case sensitivity;
+location matches text without case sensitivity. Different filter categories are
+combined. Applied filters are saved in the URL and reused when loading the next
+batch after swiping. Existing users can keep these optional fields empty; they
+appear in an unfiltered feed and can add details later.

@@ -1,3 +1,4 @@
+import DeveloperDetails from "./DeveloperDetails";
 import MembershipBadge from "./MembershipBadge";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -6,6 +7,7 @@ import { Link } from "react-router-dom";
 
 const Connections = () => {
   const [connections, setConnections] = useState([]);
+  const [unreadCounts, setUnreadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -24,6 +26,23 @@ const Connections = () => {
 
   useEffect(() => {
     fetchConnections();
+    let active = true;
+    const fetchUnread = async () => {
+      try {
+        const res = await axios.get(BASE_URL + "/chat/unread", { withCredentials: true });
+        if (active) setUnreadCounts(Object.fromEntries(res.data.data.map((chat) => [chat._id, chat.count])));
+      } catch {
+        if (active) setError("Unable to load unread message counts.");
+      }
+    };
+    fetchUnread();
+    window.addEventListener("chatUpdated", fetchUnread);
+    const interval = setInterval(fetchUnread, 30000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("chatUpdated", fetchUnread);
+    };
   }, []);
 
   if (loading) {
@@ -89,6 +108,7 @@ const Connections = () => {
                     )}
                   </h2>
                   <MembershipBadge user={user} />
+                  <DeveloperDetails user={user} />
                   {user.gender && (
                     <p className="text-xs text-base-content/50 capitalize">
                       {user.gender}
@@ -113,6 +133,9 @@ const Connections = () => {
                     <Link to={'/chat/' + user._id}>
                       <button className="btn btn-primary btn-sm gap-2">
                         💬 Chat
+                        {unreadCounts[user._id] > 0 && (
+                          <span className="badge badge-secondary badge-sm">{unreadCounts[user._id]} unread</span>
+                        )}
                       </button>
                     </Link>
                   </div>

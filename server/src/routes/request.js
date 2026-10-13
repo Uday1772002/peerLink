@@ -4,6 +4,7 @@ const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
 const sendEmail = require("../utils/sendEmail");
 const mongoose = require("mongoose");
+const { createNotification } = require("../utils/notifications");
 const { reserveDailyUsage, releaseDailyUsage } = require("../utils/membership");
 
 const requestRouter = express.Router();
@@ -59,6 +60,10 @@ requestRouter.post(
       requestSaved = true;
 
       if (status === "interested") {
+        await createNotification(req.app?.get("io"), {
+          userId: toUserId, fromUserId, type: "request",
+          text: req.user.firstName + " sent you a connection request",
+        });
         try {
           await sendEmail.run(
             req.user.firstName + " is interested in connecting with " + toUser.firstName + ".",
@@ -109,6 +114,13 @@ requestRouter.post(
       connectionRequest.status = status;
 
       const data = await connectionRequest.save();
+      if (status === "accepted") {
+        await createNotification(req.app?.get("io"), {
+          userId: connectionRequest.fromUserId,
+          fromUserId: loggedInUser._id, type: "connection",
+          text: loggedInUser.firstName + " accepted your connection request",
+        });
+      }
       res.json({ message: "connection request" + status, data });
     } catch (err) {
       res.status(404).send("Error: ", err.message);

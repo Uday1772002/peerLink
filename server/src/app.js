@@ -13,6 +13,7 @@ const paymentRouter = require("./routes/payments");
 const app = express(); //create server
 const initializeSocket = require("./utils/socket");
 const chatRouter = require("./routes/chat");
+const notificationRouter = require("./routes/notifications");
 const { initRedis } = require("./config/redis");
 
 const http = require("http");
@@ -40,9 +41,10 @@ app.use("/", requestRouter);
 app.use("/", userRouter);
 app.use("/", paymentRouter);
 app.use("/", chatRouter);
+app.use("/", notificationRouter);
 
 const server = http.createServer(app);
-initializeSocket(server);
+app.set("io", initializeSocket(server));
 connectDB()
   .then(async () => {
     await initRedis();

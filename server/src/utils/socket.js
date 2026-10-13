@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { Chat } = require("../models/chat");
 const User = require("../models/user");
+const { createNotification } = require("./notifications");
 const { checkChatConnection } = require("./chatAccess");
 const { reserveDailyUsage, releaseDailyUsage } = require("./membership");
 
@@ -36,11 +37,29 @@ const initializeSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    socket.on("joinChat", async ({ targetUserId } = {}) => {
+    socket.join("user_" + socket.userId);
+    socket.on("joinChat", async ({ targetUserId } = {}, acknowledge) => {
       try {
         jwt.verify(socket.token, process.env.JWT_SECRET);
         await checkChatConnection(socket.userId, targetUserId);
         await socket.join(getSecretRoomId(socket.userId, targetUserId));
+        if (typeof acknowledge === "function") acknowledge({ success: true });
+      } catch (err) {
+        socket.emit("errorMessage", { message: err.message });
+        if (typeof acknowledge === "function") acknowledge({ success: false });
+      }
+    });
+
+    socket.on("typing", async ({ targetUserId, isTyping } = {}) => {
+      try {
+        jwt.verify(socket.token, process.env.JWT_SECRET);
+        if (typeof isTyping !== "boolean") return;
+        if (isTyping && Date.now() - (socket.lastTypingAt || 0) < 500) return;
+        socket.lastTypingAt = Date.now();
+        await checkChatConnection(socket.userId, targetUserId);
+        socket.to(getSecretRoomId(socket.userId, targetUserId)).emit("typing", {
+          senderId: socket.userId, isTyping,
+        });
       } catch (err) {
         socket.emit("errorMessage", { message: err.message });
       }
@@ -65,13 +84,22 @@ const initializeSocket = (server) => {
         chat.messages.push({ senderId: socket.userId, text: text.trim() });
         await chat.save();
         messageSaved = true;
+        const message = chat.messages[chat.messages.length - 1];
+        await createNotification(io, {
+          userId: targetUserId, fromUserId: socket.userId,
+          type: "message", text: user.firstName + " sent you a message",
+          messageId: message._id,
+        });
+        io.to("user_" + targetUserId).emit("chatUpdated");
         const chatRoom = getSecretRoomId(socket.userId, targetUserId);
         await socket.join(chatRoom);
         io.to(chatRoom).emit("receiveMessage", {
+          _id: message._id,
           firstName: user.firstName,
           text: text.trim(),
           senderId: socket.userId,
-          createdAt: chat.messages[chat.messages.length - 1].createdAt,
+          createdAt: message.createdAt,
+          readAt: message.readAt,
         });
         if (typeof acknowledge === "function") acknowledge({ success: true });
       } catch (err) {
