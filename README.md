@@ -1,4 +1,4 @@
-# DevTinder
+# peerLink
 
 > A lightweight matchmaking app for developers — React + Express + MongoDB.
 
@@ -12,6 +12,7 @@ See the full server API list: [server/apiList.md](server/apiList.md)
 ## Quickstart (development)
 
 Prerequisites:
+
 - Node.js (v18+ recommended)
 - MongoDB instance (local or cloud)
 - Redis (optional — used by the server if available)
@@ -56,6 +57,7 @@ RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
 ```
 
 Notes:
+
 - The server uses `dotenv` to load environment variables.
 - Redis is created with default settings; if you need a remote Redis, update the connection code in `server/src/config/redis.js`.
 
@@ -87,6 +89,7 @@ Notes:
 Feel free to open issues or submit pull requests. For quick setup questions, start the server and check console logs for database/redis connection messages.
 
 ---
+
 Made with ❤️ — reach out to the repo owner for access details or questions.
 
 ## Memberships
